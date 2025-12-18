@@ -38,8 +38,20 @@ func main() {
 		pattern = args[0]
 	}
 
+	// Extract directory from pattern for resolving target types
+	dir := "."
+	if pattern != "./..." && pattern != "." {
+		dir = pattern
+		if len(dir) >= 4 && dir[len(dir)-4:] == "/..." {
+			dir = dir[:len(dir)-4]
+		}
+		if dir == "" {
+			dir = "."
+		}
+	}
+
 	// Resolve target types
-	targetTypes, err := fillstruct.ResolveTargetTypes(typeFlags)
+	targetTypes, err := fillstruct.ResolveTargetTypes(typeFlags, dir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving target types: %v\n", err)
 		os.Exit(1)

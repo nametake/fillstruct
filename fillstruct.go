@@ -37,7 +37,8 @@ type Option struct {
 
 // ResolveTargetTypes resolves type specifications to *types.Named
 // typeSpecs format: "importpath.TypeName" (e.g., "github.com/example/foo.Bar")
-func ResolveTargetTypes(typeSpecs []string) ([]*types.Named, error) {
+// dir is the directory to resolve packages from (e.g., "." or "./...")
+func ResolveTargetTypes(typeSpecs []string, dir string) ([]*types.Named, error) {
 	if len(typeSpecs) == 0 {
 		return nil, nil
 	}
@@ -64,6 +65,7 @@ func ResolveTargetTypes(typeSpecs []string) ([]*types.Named, error) {
 		// Load the package
 		cfg := &packages.Config{
 			Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+			Dir:  dir,
 		}
 		pkgs, err := packages.Load(cfg, importPath)
 		if err != nil {
@@ -173,7 +175,10 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 
 			matched := false
 			for _, targetType := range option.TargetTypes {
-				if types.Identical(namedType, targetType) {
+				// Compare by package path and type name instead of types.Identical
+				// because they may be from different package loads
+				if namedType.Obj().Pkg().Path() == targetType.Obj().Pkg().Path() &&
+					namedType.Obj().Name() == targetType.Obj().Name() {
 					matched = true
 					break
 				}
