@@ -71,7 +71,8 @@ func run(dir string, option *fillstruct.Option) error {
 	waitGroup := sync.WaitGroup{}
 
 	cfg := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles | packages.NeedImports,
+		Mode:  packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles | packages.NeedImports,
+		Tests: true,
 	}
 	pkgs, err := packages.Load(cfg, dir)
 	if err != nil {

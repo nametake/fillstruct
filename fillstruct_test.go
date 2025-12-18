@@ -118,6 +118,17 @@ func TestFormat(t *testing.T) {
 			},
 		},
 		{
+			name:       "test file is handled correctly",
+			filePath:   "test_file/input.go",
+			goldenFile: "test_file/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("test_file/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
 			name:       "all fields are specified, no changes",
 			filePath:   "complete/input.go",
 			goldenFile: "complete/golden.go",
@@ -141,7 +152,8 @@ func TestFormat(t *testing.T) {
 			}
 
 			cfg := &packages.Config{
-				Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles,
+				Mode:  packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles,
+				Tests: true,
 			}
 			pkgs, err := packages.Load(cfg, test.filePath)
 			if err != nil {

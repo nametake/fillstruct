@@ -64,8 +64,9 @@ func ResolveTargetTypes(typeSpecs []string, dir string) ([]*types.Named, error) 
 
 		// Load the package
 		cfg := &packages.Config{
-			Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-			Dir:  dir,
+			Mode:  packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+			Dir:   dir,
+			Tests: true,
 		}
 		pkgs, err := packages.Load(cfg, importPath)
 		if err != nil {
@@ -76,15 +77,26 @@ func ResolveTargetTypes(typeSpecs []string, dir string) ([]*types.Named, error) 
 			return nil, fmt.Errorf("no packages found for %q", importPath)
 		}
 
-		pkg := pkgs[0]
-		if len(pkg.Errors) > 0 {
-			return nil, fmt.Errorf("errors in package %q: %v", importPath, pkg.Errors)
+		// Try to find the type in all loaded packages (including test packages)
+		var obj types.Object
+		var foundPkg *packages.Package
+		for _, pkg := range pkgs {
+			if len(pkg.Errors) > 0 {
+				continue
+			}
+			obj = pkg.Types.Scope().Lookup(typeName)
+			if obj != nil {
+				foundPkg = pkg
+				break
+			}
 		}
 
-		// Lookup the type
-		obj := pkg.Types.Scope().Lookup(typeName)
 		if obj == nil {
 			return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
+		}
+
+		if foundPkg != nil && len(foundPkg.Errors) > 0 {
+			return nil, fmt.Errorf("errors in package %q: %v", importPath, foundPkg.Errors)
 		}
 
 		typeNameObj, ok := obj.(*types.TypeName)
@@ -360,6 +372,10 @@ func generateZeroValue(t types.Type, pkg *packages.Package) dst.Expr {
 		return &dst.CompositeLit{}
 
 	case *types.Named:
+		// Check if the underlying type is an interface
+		if _, ok := t.Underlying().(*types.Interface); ok {
+			return &dst.Ident{Name: "nil"}
+		}
 		// For named types, get the type name and create a composite literal
 		typeName := t.Obj().Name()
 		if pkgPath := t.Obj().Pkg(); pkgPath != nil && pkgPath.Path() != pkg.Types.Path() {
