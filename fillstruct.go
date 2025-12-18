@@ -32,6 +32,78 @@ type FormatResult struct {
 }
 
 type Option struct {
+	TargetTypes []*types.Named
+}
+
+// ResolveTargetTypes resolves type specifications to *types.Named
+// typeSpecs format: "importpath.TypeName" (e.g., "github.com/example/foo.Bar")
+func ResolveTargetTypes(typeSpecs []string) ([]*types.Named, error) {
+	if len(typeSpecs) == 0 {
+		return nil, nil
+	}
+
+	var targetTypes []*types.Named
+
+	for _, spec := range typeSpecs {
+		// Parse "importpath.TypeName"
+		lastDot := -1
+		for i := len(spec) - 1; i >= 0; i-- {
+			if spec[i] == '.' {
+				lastDot = i
+				break
+			}
+		}
+
+		if lastDot == -1 || lastDot == 0 || lastDot == len(spec)-1 {
+			return nil, fmt.Errorf("invalid type specification format %q: expected 'importpath.TypeName'", spec)
+		}
+
+		importPath := spec[:lastDot]
+		typeName := spec[lastDot+1:]
+
+		// Load the package
+		cfg := &packages.Config{
+			Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+		}
+		pkgs, err := packages.Load(cfg, importPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load package %q: %w", importPath, err)
+		}
+
+		if len(pkgs) == 0 {
+			return nil, fmt.Errorf("no packages found for %q", importPath)
+		}
+
+		pkg := pkgs[0]
+		if len(pkg.Errors) > 0 {
+			return nil, fmt.Errorf("errors in package %q: %v", importPath, pkg.Errors)
+		}
+
+		// Lookup the type
+		obj := pkg.Types.Scope().Lookup(typeName)
+		if obj == nil {
+			return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
+		}
+
+		typeNameObj, ok := obj.(*types.TypeName)
+		if !ok {
+			return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
+		}
+
+		named, ok := typeNameObj.Type().(*types.Named)
+		if !ok {
+			return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
+		}
+
+		// Check if underlying type is a struct
+		if _, ok := named.Underlying().(*types.Struct); !ok {
+			return nil, fmt.Errorf("type %q in package %q is not a struct (underlying type: %T)", typeName, importPath, named.Underlying())
+		}
+
+		targetTypes = append(targetTypes, named)
+	}
+
+	return targetTypes, nil
 }
 
 func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResult, error) {
@@ -67,17 +139,21 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 			return true
 		}
 
-		// Get the underlying struct type
+		// Get the underlying struct type and check if it matches target types
 		var structType *types.Struct
+		var namedType *types.Named
+
 		switch t := tv.Type.(type) {
 		case *types.Named:
 			if s, ok := t.Underlying().(*types.Struct); ok {
 				structType = s
+				namedType = t
 			}
 		case *types.Pointer:
 			if named, ok := t.Elem().(*types.Named); ok {
 				if s, ok := named.Underlying().(*types.Struct); ok {
 					structType = s
+					namedType = named
 				}
 			}
 		case *types.Struct:
@@ -86,6 +162,26 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 
 		if structType == nil {
 			return true
+		}
+
+		// If target types are specified, check if this type matches
+		if len(option.TargetTypes) > 0 {
+			if namedType == nil {
+				// Skip anonymous structs when target types are specified
+				return true
+			}
+
+			matched := false
+			for _, targetType := range option.TargetTypes {
+				if types.Identical(namedType, targetType) {
+					matched = true
+					break
+				}
+			}
+
+			if !matched {
+				return true
+			}
 		}
 
 		// Check if all elements are keyed

@@ -11,20 +11,45 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+type arrayFlags []string
+
+func (a *arrayFlags) String() string {
+	return fmt.Sprint(*a)
+}
+
+func (a *arrayFlags) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
 func main() {
+	var typeFlags arrayFlags
+	flag.Var(&typeFlags, "type", "target type (importpath.TypeName), can be specified multiple times")
 	flag.Parse()
 
+	// If no --type flag is specified, do nothing
+	if len(typeFlags) == 0 {
+		os.Exit(0)
+	}
+
 	args := flag.Args()
-	if len(args) == 0 {
-		fmt.Println("No directory specified.")
-		flag.Usage()
+	pattern := "./..."
+	if len(args) > 0 {
+		pattern = args[0]
+	}
+
+	// Resolve target types
+	targetTypes, err := fillstruct.ResolveTargetTypes(typeFlags)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving target types: %v\n", err)
 		os.Exit(1)
 	}
-	dir := args[0]
 
-	option := &fillstruct.Option{}
+	option := &fillstruct.Option{
+		TargetTypes: targetTypes,
+	}
 
-	if err := run(dir, option); err != nil {
+	if err := run(pattern, option); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
@@ -34,7 +59,7 @@ func run(dir string, option *fillstruct.Option) error {
 	waitGroup := sync.WaitGroup{}
 
 	cfg := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles,
+		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedFiles | packages.NeedImports,
 	}
 	pkgs, err := packages.Load(cfg, dir)
 	if err != nil {
