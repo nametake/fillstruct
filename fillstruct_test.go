@@ -46,7 +46,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "simple/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("simple.go"),
+				Path:    addDirPrefix("simple/input.go"),
 				Changed: true,
 				Errors:  []*FormatError{},
 			},
@@ -57,7 +57,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "multiple_types/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("multiple_types.go"),
+				Path:    addDirPrefix("multiple_types/input.go"),
 				Changed: true,
 				Errors:  []*FormatError{},
 			},
@@ -68,7 +68,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "pointer/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("pointer.go"),
+				Path:    addDirPrefix("pointer/input.go"),
 				Changed: true,
 				Errors:  []*FormatError{},
 			},
@@ -79,7 +79,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "nested_struct/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("nested_struct.go"),
+				Path:    addDirPrefix("nested_struct/input.go"),
 				Changed: true,
 				Errors:  []*FormatError{},
 			},
@@ -90,7 +90,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "unexported_field/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("unexported_field.go"),
+				Path:    addDirPrefix("unexported_field/input.go"),
 				Changed: false,
 				Errors:  []*FormatError{},
 			},
@@ -101,7 +101,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "position_based/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("position_based.go"),
+				Path:    addDirPrefix("position_based/input.go"),
 				Changed: false,
 				Errors:  []*FormatError{},
 			},
@@ -112,7 +112,7 @@ func TestFormat(t *testing.T) {
 			goldenFile: "complete/golden.go",
 			option:     &Option{},
 			want: &FormatResult{
-				Path:    addDirPrefix("complete.go"),
+				Path:    addDirPrefix("complete/input.go"),
 				Changed: false,
 				Errors:  []*FormatError{},
 			},
