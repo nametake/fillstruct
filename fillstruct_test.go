@@ -107,6 +107,17 @@ func TestFormat(t *testing.T) {
 			},
 		},
 		{
+			name:       "string pointer field is filled with nil",
+			filePath:   "string_pointer/input.go",
+			goldenFile: "string_pointer/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("string_pointer/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
 			name:       "all fields are specified, no changes",
 			filePath:   "complete/input.go",
 			goldenFile: "complete/golden.go",
