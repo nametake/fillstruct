@@ -1,0 +1,13 @@
+package pointer
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	_ = &Person{
+		Name: "",
+		Age:  0,
+	}
+}
