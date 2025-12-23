@@ -385,9 +385,11 @@ func generateZeroValue(t types.Type, pkg *packages.Package) dst.Expr {
 		typeName := t.Obj().Name()
 		if pkgPath := t.Obj().Pkg(); pkgPath != nil && pkgPath.Path() != pkg.Types.Path() {
 			// Need to qualify with package name
-			// For simplicity, just use the type name
 			return &dst.CompositeLit{
-				Type: &dst.Ident{Name: typeName},
+				Type: &dst.SelectorExpr{
+					X:   &dst.Ident{Name: pkgPath.Name()},
+					Sel: &dst.Ident{Name: typeName},
+				},
 			}
 		}
 		return &dst.CompositeLit{

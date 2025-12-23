@@ -140,6 +140,17 @@ func TestFormat(t *testing.T) {
 			},
 		},
 		{
+			name:       "external package type is handled correctly",
+			filePath:   "external_package/input.go",
+			goldenFile: "external_package/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("external_package/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
 			name:       "all fields are specified, no changes",
 			filePath:   "complete/input.go",
 			goldenFile: "complete/golden.go",
