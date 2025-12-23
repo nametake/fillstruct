@@ -129,6 +129,17 @@ func TestFormat(t *testing.T) {
 			},
 		},
 		{
+			name:       "defined types are handled correctly",
+			filePath:   "defined_types/input.go",
+			goldenFile: "defined_types/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("defined_types/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
 			name:       "all fields are specified, no changes",
 			filePath:   "complete/input.go",
 			goldenFile: "complete/golden.go",
