@@ -417,7 +417,7 @@ func generateZeroValue(t types.Type, pkg *packages.Package, opt *Option) dst.Exp
 		}
 		// If underlying type is a basic type, return its zero value
 		if basic, ok := underlying.(*types.Basic); ok {
-			return generateZeroValue(basic, pkg)
+			return generateZeroValue(basic, pkg, opt)
 		}
 		// For named types with struct underlying, get the type name and create a composite literal
 		typeName := t.Obj().Name()
