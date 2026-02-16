@@ -161,6 +161,77 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "custom default values are used for enum types",
+			filePath:   "custom_default/input.go",
+			goldenFile: "custom_default/golden.go",
+			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments" because
+				// we load files directly. In real usage, it would be the actual import path
+				// like "github.com/example/domain.Status".
+				CustomDefaults: map[string]string{
+					"command-line-arguments.Status": "StatusUnknown",
+					"command-line-arguments.Role":   "RoleGuest",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "custom default and zero values are mixed correctly",
+			filePath:   "custom_default_mixed/input.go",
+			goldenFile: "custom_default_mixed/golden.go",
+			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments".
+				// In real usage, it would be the actual import path.
+				CustomDefaults: map[string]string{
+					"command-line-arguments.Status": "StatusUnknown",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default_mixed/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "custom default values are used for basic types",
+			filePath:   "custom_default_basic/input.go",
+			goldenFile: "custom_default_basic/golden.go",
+			option: &Option{
+				// Note: Basic types like "int", "string", "bool" can also have custom defaults.
+				// All fields of the same basic type will use the same default value.
+				CustomDefaults: map[string]string{
+					"int":  "8080",
+					"bool": "true",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default_basic/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "external package enum with fully qualified constant name",
+			filePath:   "external_enum/input.go",
+			goldenFile: "external_enum/golden.go",
+			option: &Option{
+				// Note: For external package types, the constant name must include
+				// the package qualifier (e.g., "otherpkg.StatusUnknown").
+				CustomDefaults: map[string]string{
+					"github.com/nametake/fillstruct/testdata/external_enum/otherpkg.Status": "otherpkg.StatusUnknown",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("external_enum/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {
