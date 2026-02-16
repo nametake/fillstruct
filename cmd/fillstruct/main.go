@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/nametake/fillstruct"
@@ -24,7 +25,9 @@ func (a *arrayFlags) Set(value string) error {
 
 func main() {
 	var typeFlags arrayFlags
+	var defaultFlags arrayFlags
 	flag.Var(&typeFlags, "type", "target type (importpath.TypeName), can be specified multiple times")
+	flag.Var(&defaultFlags, "default", "custom default value (format: TypeSpec=ConstantName), can be specified multiple times")
 	flag.Parse()
 
 	// If no --type flag is specified, do nothing
@@ -57,14 +60,53 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Parse default values
+	customDefaults, err := parseDefaultValues(defaultFlags)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing default values: %v\n", err)
+		os.Exit(1)
+	}
+
 	option := &fillstruct.Option{
-		TargetTypes: targetTypes,
+		TargetTypes:    targetTypes,
+		CustomDefaults: customDefaults,
 	}
 
 	if err := run(pattern, option); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
+}
+
+// parseDefaultValues parses default value specifications
+// Format: "TypeSpec=ConstantName"
+// TypeSpec can be:
+//   - Basic type name (e.g., "int", "string", "bool")
+//   - Fully qualified type name (e.g., "github.com/example/domain.Status")
+func parseDefaultValues(specs []string) (map[string]string, error) {
+	if len(specs) == 0 {
+		return nil, nil
+	}
+
+	defaults := make(map[string]string)
+	for _, spec := range specs {
+		parts := strings.SplitN(spec, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid format: %q (expected TypeSpec=ConstantName)", spec)
+		}
+
+		typeSpec := strings.TrimSpace(parts[0])
+		constantName := strings.TrimSpace(parts[1])
+
+		// Basic validation
+		if typeSpec == "" || constantName == "" {
+			return nil, fmt.Errorf("type and constant cannot be empty in %q", spec)
+		}
+
+		defaults[typeSpec] = constantName
+	}
+
+	return defaults, nil
 }
 
 func run(dir string, option *fillstruct.Option) error {
