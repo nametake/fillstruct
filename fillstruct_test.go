@@ -161,6 +161,37 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "custom default values are used for enum types",
+			filePath:   "custom_default/input.go",
+			goldenFile: "custom_default/golden.go",
+			option: &Option{
+				CustomDefaults: map[string]string{
+					"github.com/nametake/fillstruct/testdata/custom_default.Status": "StatusUnknown",
+					"github.com/nametake/fillstruct/testdata/custom_default.Role":   "RoleGuest",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "custom default and zero values are mixed correctly",
+			filePath:   "custom_default_mixed/input.go",
+			goldenFile: "custom_default_mixed/golden.go",
+			option: &Option{
+				CustomDefaults: map[string]string{
+					"github.com/nametake/fillstruct/testdata/custom_default_mixed.Status": "StatusUnknown",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default_mixed/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {

@@ -32,7 +32,8 @@ type FormatResult struct {
 }
 
 type Option struct {
-	TargetTypes []*types.Named
+	TargetTypes    []*types.Named
+	CustomDefaults map[string]string // "importpath.TypeName" -> "ConstantName"
 }
 
 // ResolveTargetTypes resolves type specifications to *types.Named
