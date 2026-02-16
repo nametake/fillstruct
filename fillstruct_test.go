@@ -215,6 +215,23 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "external package enum with fully qualified constant name",
+			filePath:   "external_enum/input.go",
+			goldenFile: "external_enum/golden.go",
+			option: &Option{
+				// Note: For external package types, the constant name must include
+				// the package qualifier (e.g., "otherpkg.StatusUnknown").
+				CustomDefaults: map[string]string{
+					"github.com/nametake/fillstruct/testdata/external_enum/otherpkg.Status": "otherpkg.StatusUnknown",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("external_enum/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {

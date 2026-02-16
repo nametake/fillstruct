@@ -21,7 +21,8 @@ go run github.com/nametake/fillstruct/cmd/fillstruct@latest \
 
 - `--type`: Target type in the format `importpath.TypeName` (required, can be specified multiple times)
 - `--default`: Custom default value in the format `TypeSpec=ConstantName` (optional, can be specified multiple times)
-  - For named types: `importpath.TypeName=ConstantName` (e.g., `github.com/example.Status=StatusUnknown`)
+  - For named types in the same package: `importpath.TypeName=ConstantName` (e.g., `github.com/example.Status=StatusUnknown`)
+  - For named types in external packages: `importpath.TypeName=pkg.ConstantName` (e.g., `github.com/example/otherpkg.Status=otherpkg.StatusUnknown`)
   - For basic types: `TypeName=Value` (e.g., `int=8080`, `bool=true`)
 - `[pattern]`: Package pattern to process (default: `./...`)
 
@@ -138,6 +139,58 @@ func main() {
         Name:   "myapp",
         Port:   8080,
         Status: StatusUnknown,
+    }
+    _ = c
+}
+```
+
+### External Package Enums
+
+When using enums from external packages, the constant name must include the package qualifier:
+
+```go
+package main
+
+import "github.com/example/myapp/status"
+
+type Config struct {
+    Name   string
+    Status status.Status
+}
+
+func main() {
+    c := &Config{
+        Name: "myapp",
+    }
+    _ = c
+}
+```
+
+Run fillstruct with external package enum:
+
+```bash
+go run github.com/nametake/fillstruct/cmd/fillstruct@latest \
+  --type github.com/example/myapp.Config \
+  --default 'github.com/example/myapp/status.Status=status.StatusUnknown' \
+  ./...
+```
+
+The code will be updated to:
+
+```go
+package main
+
+import "github.com/example/myapp/status"
+
+type Config struct {
+    Name   string
+    Status status.Status
+}
+
+func main() {
+    c := &Config{
+        Name:   "myapp",
+        Status: status.StatusUnknown,
     }
     _ = c
 }
