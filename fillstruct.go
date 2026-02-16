@@ -379,6 +379,15 @@ func generateZeroValue(t types.Type, pkg *packages.Package, opt *Option) dst.Exp
 		}
 	}
 
+	// Check for custom default for Basic types
+	if basic, ok := t.(*types.Basic); ok {
+		if opt.CustomDefaults != nil {
+			if constantName, ok := opt.CustomDefaults[basic.Name()]; ok {
+				return &dst.Ident{Name: constantName}
+			}
+		}
+	}
+
 	switch t := t.(type) {
 	case *types.Basic:
 		switch t.Kind() {

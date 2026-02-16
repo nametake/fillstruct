@@ -197,6 +197,24 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "custom default values are used for basic types",
+			filePath:   "custom_default_basic/input.go",
+			goldenFile: "custom_default_basic/golden.go",
+			option: &Option{
+				// Note: Basic types like "int", "string", "bool" can also have custom defaults.
+				// All fields of the same basic type will use the same default value.
+				CustomDefaults: map[string]string{
+					"int":  "8080",
+					"bool": "true",
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("custom_default_basic/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {
