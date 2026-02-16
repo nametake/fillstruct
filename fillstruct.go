@@ -272,7 +272,7 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 				newElts = append(newElts, kv)
 			} else {
 				// Create new KeyValueExpr for missing field
-				zeroValue := generateZeroValue(field.fieldType, pkg)
+				zeroValue := generateZeroValue(field.fieldType, pkg, option)
 				newKV := &dst.KeyValueExpr{
 					Key:   &dst.Ident{Name: field.name},
 					Value: zeroValue,
@@ -349,8 +349,36 @@ func isExportedField(name string) bool {
 	return unicode.IsUpper(r)
 }
 
+// getCustomDefault returns the custom default constant name for the given named type
+func getCustomDefault(named *types.Named, opt *Option) string {
+	if opt.CustomDefaults == nil {
+		return ""
+	}
+
+	obj := named.Obj()
+	if obj == nil || obj.Pkg() == nil {
+		return ""
+	}
+
+	// Build the fully qualified type name
+	typeSpec := obj.Pkg().Path() + "." + obj.Name()
+
+	if constantName, ok := opt.CustomDefaults[typeSpec]; ok {
+		return constantName
+	}
+
+	return ""
+}
+
 // generateZeroValue generates a zero value expression for the given type
-func generateZeroValue(t types.Type, pkg *packages.Package) dst.Expr {
+func generateZeroValue(t types.Type, pkg *packages.Package, opt *Option) dst.Expr {
+	// Check for custom default for Named types
+	if named, ok := t.(*types.Named); ok {
+		if customDefault := getCustomDefault(named, opt); customDefault != "" {
+			return &dst.Ident{Name: customDefault}
+		}
+	}
+
 	switch t := t.(type) {
 	case *types.Basic:
 		switch t.Kind() {

@@ -166,9 +166,12 @@ func TestFormat(t *testing.T) {
 			filePath:   "custom_default/input.go",
 			goldenFile: "custom_default/golden.go",
 			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments" because
+				// we load files directly. In real usage, it would be the actual import path
+				// like "github.com/example/domain.Status".
 				CustomDefaults: map[string]string{
-					"github.com/nametake/fillstruct/testdata/custom_default.Status": "StatusUnknown",
-					"github.com/nametake/fillstruct/testdata/custom_default.Role":   "RoleGuest",
+					"command-line-arguments.Status": "StatusUnknown",
+					"command-line-arguments.Role":   "RoleGuest",
 				},
 			},
 			want: &FormatResult{
@@ -182,8 +185,10 @@ func TestFormat(t *testing.T) {
 			filePath:   "custom_default_mixed/input.go",
 			goldenFile: "custom_default_mixed/golden.go",
 			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments".
+				// In real usage, it would be the actual import path.
 				CustomDefaults: map[string]string{
-					"github.com/nametake/fillstruct/testdata/custom_default_mixed.Status": "StatusUnknown",
+					"command-line-arguments.Status": "StatusUnknown",
 				},
 			},
 			want: &FormatResult{

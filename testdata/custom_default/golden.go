@@ -3,8 +3,8 @@ package custom_default
 type Status int
 
 const (
-	StatusUnknown Status = 0
-	StatusActive  Status = 1
+	StatusUnknown  Status = 0
+	StatusActive   Status = 1
 	StatusInactive Status = 2
 )
 
