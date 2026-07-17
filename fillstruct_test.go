@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -232,6 +233,94 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "target fields are not specified, all missing fields are filled",
+			filePath:   "target_fields_unspecified/input.go",
+			goldenFile: "target_fields_unspecified/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_unspecified/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "target fields entry exists only for another type, type without entry is fully filled and type with entry fills only listed fields",
+			filePath:   "target_fields_other_type/input.go",
+			goldenFile: "target_fields_other_type/golden.go",
+			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments".
+				// In real usage, it would be the actual import path.
+				TargetFields: map[string][]string{
+					"command-line-arguments.Config": {"Port"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_other_type/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "one target field is listed and missing, only the listed field is filled",
+			filePath:   "target_fields_single/input.go",
+			goldenFile: "target_fields_single/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Age"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_single/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "multiple target fields are listed and missing, all listed fields are filled and unlisted fields are not",
+			filePath:   "target_fields_multiple/input.go",
+			goldenFile: "target_fields_multiple/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Age", "Email"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_multiple/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "listed target field is already present, no changes are made",
+			filePath:   "target_fields_already_present/input.go",
+			goldenFile: "target_fields_already_present/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Name"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_already_present/input.go"),
+				Changed: false,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "target fields entry is empty, no fields are filled",
+			filePath:   "target_fields_empty/input.go",
+			goldenFile: "target_fields_empty/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_empty/input.go"),
+				Changed: false,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -272,6 +361,100 @@ func TestFormat(t *testing.T) {
 
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("Format(%q) returned unexpected result (-want +got):\n%s", test.filePath, diff)
+			}
+		})
+	}
+}
+
+func TestParseTypeSpec(t *testing.T) {
+	type args struct {
+		spec string
+	}
+	type want struct {
+		importPath string
+		typeName   string
+		fieldName  string
+		err        error
+	}
+	tests := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "importpath.TypeName format, import path and type name are returned",
+			args: args{spec: "github.com/example/domain.Foo"},
+			want: want{
+				importPath: "github.com/example/domain",
+				typeName:   "Foo",
+				fieldName:  "",
+				err:        nil,
+			},
+		},
+		{
+			name: "importpath.TypeName.FieldName format, field name is also returned",
+			args: args{spec: "github.com/example/domain.Foo.Name"},
+			want: want{
+				importPath: "github.com/example/domain",
+				typeName:   "Foo",
+				fieldName:  "Name",
+				err:        nil,
+			},
+		},
+		{
+			name: "import path without slash, package name and type name are returned",
+			args: args{spec: "domain.Foo"},
+			want: want{
+				importPath: "domain",
+				typeName:   "Foo",
+				fieldName:  "",
+				err:        nil,
+			},
+		},
+		{
+			name: "type name only without import path, an error is returned",
+			args: args{spec: "Foo"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+		{
+			name: "more than three dot-separated elements after the last slash, an error is returned",
+			args: args{spec: "github.com/example/domain.Foo.Name.Extra"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+		{
+			name: "empty element between dots, an error is returned",
+			args: args{spec: "github.com/example/domain..Foo"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+	}
+
+	cmpOpts := []cmp.Option{cmp.AllowUnexported(want{}), cmpopts.EquateErrors()}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			importPath, typeName, fieldName, err := parseTypeSpec(test.args.spec)
+			got := want{
+				importPath: importPath,
+				typeName:   typeName,
+				fieldName:  fieldName,
+				err:        err,
+			}
+			if diff := cmp.Diff(test.want, got, cmpOpts...); diff != "" {
+				t.Errorf("parseTypeSpec(%q) returned unexpected result (-want +got):\n%s", test.args.spec, diff)
 			}
 		})
 	}

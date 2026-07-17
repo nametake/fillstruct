@@ -12,14 +12,18 @@ go install github.com/nametake/fillstruct/cmd/fillstruct@latest
 
 ```bash
 go run github.com/nametake/fillstruct/cmd/fillstruct@latest \
-  --type <importpath.TypeName> \
+  --type <importpath.TypeName[.FieldName]> \
   [--default <TypeSpec=ConstantName>...] \
   [pattern]
 ```
 
 ### Options
 
-- `--type`: Target type in the format `importpath.TypeName` (required, can be specified multiple times)
+- `--type`: Target type in the format `importpath.TypeName` or `importpath.TypeName.FieldName` (required, can be specified multiple times)
+  - `importpath.TypeName` fills all missing fields of the type
+  - `importpath.TypeName.FieldName` fills only the specified field of the type
+  - To fill multiple specific fields of the same type, repeat `--type` (e.g., `--type pkg.Foo.Name --type pkg.Foo.Age`)
+  - If the same type is specified both with and without a field name, the one without a field name takes precedence and all fields are filled
 - `--default`: Custom default value in the format `TypeSpec=ConstantName` (optional, can be specified multiple times)
   - For named types in the same package: `importpath.TypeName=ConstantName` (e.g., `github.com/example.Status=StatusUnknown`)
   - For named types in external packages: `importpath.TypeName=pkg.ConstantName` (e.g., `github.com/example/otherpkg.Status=otherpkg.StatusUnknown`)
@@ -73,6 +77,55 @@ func main() {
         Name:        "Alice",
         Age:         0,
         Description: nil,
+    }
+    _ = p
+}
+```
+
+### Filling Specific Fields Only
+
+You can fill only specific fields by appending the field name to `--type`:
+
+```go
+package main
+
+type Person struct {
+    Name        string
+    Age         int
+    Description *string
+}
+
+func main() {
+    p := &Person{
+        Name: "Alice",
+    }
+    _ = p
+}
+```
+
+Run fillstruct with a field name:
+
+```bash
+go run github.com/nametake/fillstruct/cmd/fillstruct@latest \
+  --type github.com/example/myapp.Person.Age \
+  ./...
+```
+
+Only the specified field is filled:
+
+```go
+package main
+
+type Person struct {
+    Name        string
+    Age         int
+    Description *string
+}
+
+func main() {
+    p := &Person{
+        Name: "Alice",
+        Age:  0,
     }
     _ = p
 }
@@ -209,6 +262,7 @@ func main() {
   - Named types (e.g., `type Status int`)
   - Basic types (e.g., `int`, `string`, `bool`)
 - Supports multiple target types
+- Supports filling only specific fields (e.g., `--type pkg.Foo.Name`)
 - Preserves code formatting and comments
 - Skips position-based literals (e.g., `Person{"Alice", 25}`)
 - Skips unexported fields when the struct is from another package
