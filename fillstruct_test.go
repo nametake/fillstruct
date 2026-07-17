@@ -232,6 +232,94 @@ func TestFormat(t *testing.T) {
 				Errors:  []*FormatError{},
 			},
 		},
+		{
+			name:       "target fields are not specified, all missing fields are filled",
+			filePath:   "target_fields_unspecified/input.go",
+			goldenFile: "target_fields_unspecified/golden.go",
+			option:     &Option{},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_unspecified/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "target fields entry exists only for another type, type without entry is fully filled and type with entry fills only listed fields",
+			filePath:   "target_fields_other_type/input.go",
+			goldenFile: "target_fields_other_type/golden.go",
+			option: &Option{
+				// Note: In test environment, package path is "command-line-arguments".
+				// In real usage, it would be the actual import path.
+				TargetFields: map[string][]string{
+					"command-line-arguments.Config": {"Port"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_other_type/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "one target field is listed and missing, only the listed field is filled",
+			filePath:   "target_fields_single/input.go",
+			goldenFile: "target_fields_single/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Age"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_single/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "multiple target fields are listed and missing, all listed fields are filled and unlisted fields are not",
+			filePath:   "target_fields_multiple/input.go",
+			goldenFile: "target_fields_multiple/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Age", "Email"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_multiple/input.go"),
+				Changed: true,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "listed target field is already present, no changes are made",
+			filePath:   "target_fields_already_present/input.go",
+			goldenFile: "target_fields_already_present/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {"Name"},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_already_present/input.go"),
+				Changed: false,
+				Errors:  []*FormatError{},
+			},
+		},
+		{
+			name:       "target fields entry is empty, no fields are filled",
+			filePath:   "target_fields_empty/input.go",
+			goldenFile: "target_fields_empty/golden.go",
+			option: &Option{
+				TargetFields: map[string][]string{
+					"command-line-arguments.User": {},
+				},
+			},
+			want: &FormatResult{
+				Path:    addDirPrefix("target_fields_empty/input.go"),
+				Changed: false,
+				Errors:  []*FormatError{},
+			},
+		},
 	}
 
 	for _, test := range tests {

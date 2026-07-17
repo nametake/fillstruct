@@ -33,7 +33,8 @@ type FormatResult struct {
 
 type Option struct {
 	TargetTypes    []*types.Named
-	CustomDefaults map[string]string // "importpath.TypeName" -> "ConstantName"
+	TargetFields   map[string][]string // "importpath.TypeName" -> field names to fill (no entry = all fields)
+	CustomDefaults map[string]string   // "importpath.TypeName" -> "ConstantName"
 }
 
 // ResolveTargetTypes resolves type specifications to *types.Named
