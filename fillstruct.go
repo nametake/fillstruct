@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/token"
 	"go/types"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -37,89 +38,156 @@ type Option struct {
 	CustomDefaults map[string]string   // "importpath.TypeName" -> "ConstantName"
 }
 
-// ResolveTargetTypes resolves type specifications to *types.Named
-// typeSpecs format: "importpath.TypeName" (e.g., "github.com/example/foo.Bar")
+// ResolveTargetTypes resolves type specifications to *types.Named and
+// collects field specifications
+// typeSpecs format: "importpath.TypeName" or "importpath.TypeName.FieldName"
+// (e.g., "github.com/example/foo.Bar", "github.com/example/foo.Bar.Name")
 // dir is the directory to resolve packages from (e.g., "." or "./...")
-func ResolveTargetTypes(typeSpecs []string, dir string) ([]*types.Named, error) {
+// The returned map holds "importpath.TypeName" -> field names for types
+// specified with FieldName. A type specified without FieldName fills all
+// fields and has no entry, even if it is also specified with FieldName.
+func ResolveTargetTypes(typeSpecs []string, dir string) ([]*types.Named, map[string][]string, error) {
 	if len(typeSpecs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var targetTypes []*types.Named
+	resolvedTypes := make(map[string]*types.Named)
+	targetFields := make(map[string][]string)
+	allFieldTypes := make(map[string]bool)
 
 	for _, spec := range typeSpecs {
-		// Parse "importpath.TypeName"
-		lastDot := -1
-		for i := len(spec) - 1; i >= 0; i-- {
-			if spec[i] == '.' {
-				lastDot = i
-				break
-			}
-		}
-
-		if lastDot == -1 || lastDot == 0 || lastDot == len(spec)-1 {
-			return nil, fmt.Errorf("invalid type specification format %q: expected 'importpath.TypeName'", spec)
-		}
-
-		importPath := spec[:lastDot]
-		typeName := spec[lastDot+1:]
-
-		// Load the package
-		cfg := &packages.Config{
-			Mode:  packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-			Dir:   dir,
-			Tests: true,
-		}
-		pkgs, err := packages.Load(cfg, importPath)
+		importPath, typeName, fieldName, err := parseTypeSpec(spec)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load package %q: %w", importPath, err)
+			return nil, nil, err
 		}
 
-		if len(pkgs) == 0 {
-			return nil, fmt.Errorf("no packages found for %q", importPath)
-		}
-
-		// Try to find the type in all loaded packages (including test packages)
-		var obj types.Object
-		var foundPkg *packages.Package
-		for _, pkg := range pkgs {
-			if len(pkg.Errors) > 0 {
-				continue
+		typeSpec := importPath + "." + typeName
+		named, ok := resolvedTypes[typeSpec]
+		if !ok {
+			named, err = resolveNamedType(importPath, typeName, dir)
+			if err != nil {
+				return nil, nil, err
 			}
-			obj = pkg.Types.Scope().Lookup(typeName)
-			if obj != nil {
-				foundPkg = pkg
+			resolvedTypes[typeSpec] = named
+			targetTypes = append(targetTypes, named)
+		}
+
+		if fieldName == "" {
+			allFieldTypes[typeSpec] = true
+			continue
+		}
+
+		structType := named.Underlying().(*types.Struct)
+		found := false
+		for i := 0; i < structType.NumFields(); i++ {
+			if structType.Field(i).Name() == fieldName {
+				found = true
 				break
 			}
 		}
-
-		if obj == nil {
-			return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
+		if !found {
+			return nil, nil, fmt.Errorf("field %q not found in type %q", fieldName, typeSpec)
 		}
 
-		if foundPkg != nil && len(foundPkg.Errors) > 0 {
-			return nil, fmt.Errorf("errors in package %q: %v", importPath, foundPkg.Errors)
-		}
-
-		typeNameObj, ok := obj.(*types.TypeName)
-		if !ok {
-			return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
-		}
-
-		named, ok := typeNameObj.Type().(*types.Named)
-		if !ok {
-			return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
-		}
-
-		// Check if underlying type is a struct
-		if _, ok := named.Underlying().(*types.Struct); !ok {
-			return nil, fmt.Errorf("type %q in package %q is not a struct (underlying type: %T)", typeName, importPath, named.Underlying())
-		}
-
-		targetTypes = append(targetTypes, named)
+		targetFields[typeSpec] = append(targetFields[typeSpec], fieldName)
 	}
 
-	return targetTypes, nil
+	// A type specified without FieldName fills all fields
+	for typeSpec := range allFieldTypes {
+		delete(targetFields, typeSpec)
+	}
+	if len(targetFields) == 0 {
+		targetFields = nil
+	}
+
+	return targetTypes, targetFields, nil
+}
+
+// parseTypeSpec parses "importpath.TypeName" or "importpath.TypeName.FieldName".
+// The part after the last slash is split by dots: two elements mean a type,
+// three elements mean a type and a field.
+func parseTypeSpec(spec string) (importPath, typeName, fieldName string, err error) {
+	prefix := ""
+	segment := spec
+	if lastSlash := strings.LastIndex(spec, "/"); lastSlash >= 0 {
+		prefix = spec[:lastSlash+1]
+		segment = spec[lastSlash+1:]
+	}
+
+	parts := strings.Split(segment, ".")
+	for _, part := range parts {
+		if part == "" {
+			return "", "", "", fmt.Errorf("invalid type specification format %q: expected 'importpath.TypeName' or 'importpath.TypeName.FieldName'", spec)
+		}
+	}
+
+	switch len(parts) {
+	case 2:
+		return prefix + parts[0], parts[1], "", nil
+	case 3:
+		return prefix + parts[0], parts[1], parts[2], nil
+	default:
+		return "", "", "", fmt.Errorf("invalid type specification format %q: expected 'importpath.TypeName' or 'importpath.TypeName.FieldName'", spec)
+	}
+}
+
+// resolveNamedType loads the package and resolves the type name to a *types.Named
+// whose underlying type is a struct
+func resolveNamedType(importPath, typeName, dir string) (*types.Named, error) {
+	// Load the package
+	cfg := &packages.Config{
+		Mode:  packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+		Dir:   dir,
+		Tests: true,
+	}
+	pkgs, err := packages.Load(cfg, importPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load package %q: %w", importPath, err)
+	}
+
+	if len(pkgs) == 0 {
+		return nil, fmt.Errorf("no packages found for %q", importPath)
+	}
+
+	// Try to find the type in all loaded packages (including test packages)
+	var obj types.Object
+	var foundPkg *packages.Package
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			continue
+		}
+		obj = pkg.Types.Scope().Lookup(typeName)
+		if obj != nil {
+			foundPkg = pkg
+			break
+		}
+	}
+
+	if obj == nil {
+		return nil, fmt.Errorf("type %q not found in package %q", typeName, importPath)
+	}
+
+	if foundPkg != nil && len(foundPkg.Errors) > 0 {
+		return nil, fmt.Errorf("errors in package %q: %v", importPath, foundPkg.Errors)
+	}
+
+	typeNameObj, ok := obj.(*types.TypeName)
+	if !ok {
+		return nil, fmt.Errorf("%q is not a type in package %q", typeName, importPath)
+	}
+
+	named, ok := typeNameObj.Type().(*types.Named)
+	if !ok {
+		return nil, fmt.Errorf("%q is not a named type in package %q", typeName, importPath)
+	}
+
+	// Check if underlying type is a struct
+	if _, ok := named.Underlying().(*types.Struct); !ok {
+		return nil, fmt.Errorf("type %q in package %q is not a struct (underlying type: %T)", typeName, importPath, named.Underlying())
+	}
+
+	return named, nil
 }
 
 func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResult, error) {
@@ -208,6 +276,9 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 			return true
 		}
 
+		// Get the fields to fill for this type
+		targetFields, hasTargetFields := getTargetFields(namedType, option)
+
 		// Collect present fields
 		presentFields := make(map[string]bool)
 		for _, elt := range lit.Elts {
@@ -238,9 +309,12 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 			})
 		}
 
-		// Check if any fields are missing
+		// Check if any fields to fill are missing
 		hasMissing := false
 		for _, field := range allFields {
+			if hasTargetFields && !targetFields[field.name] {
+				continue
+			}
 			if !presentFields[field.name] {
 				hasMissing = true
 				break
@@ -271,6 +345,9 @@ func Format(pkg *packages.Package, file *ast.File, option *Option) (*FormatResul
 			if kv, ok := existingKVs[field.name]; ok {
 				// Use existing KeyValueExpr
 				newElts = append(newElts, kv)
+			} else if hasTargetFields && !targetFields[field.name] {
+				// Skip missing fields that are not listed in TargetFields
+				continue
 			} else {
 				// Create new KeyValueExpr for missing field
 				zeroValue := generateZeroValue(field.fieldType, pkg, option)
@@ -348,6 +425,34 @@ func isExportedField(name string) bool {
 	}
 	r, _ := utf8.DecodeRuneInString(name)
 	return unicode.IsUpper(r)
+}
+
+// getTargetFields returns the set of field names to fill for the given named type
+// and whether Option.TargetFields has an entry for it
+func getTargetFields(named *types.Named, opt *Option) (map[string]bool, bool) {
+	if opt.TargetFields == nil || named == nil {
+		return nil, false
+	}
+
+	obj := named.Obj()
+	if obj == nil || obj.Pkg() == nil {
+		return nil, false
+	}
+
+	// Build the fully qualified type name
+	typeSpec := obj.Pkg().Path() + "." + obj.Name()
+
+	fields, ok := opt.TargetFields[typeSpec]
+	if !ok {
+		return nil, false
+	}
+
+	targetFields := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		targetFields[field] = true
+	}
+
+	return targetFields, true
 }
 
 // getCustomDefault returns the custom default constant name for the given named type

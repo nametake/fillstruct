@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -360,6 +361,100 @@ func TestFormat(t *testing.T) {
 
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("Format(%q) returned unexpected result (-want +got):\n%s", test.filePath, diff)
+			}
+		})
+	}
+}
+
+func TestParseTypeSpec(t *testing.T) {
+	type args struct {
+		spec string
+	}
+	type want struct {
+		importPath string
+		typeName   string
+		fieldName  string
+		err        error
+	}
+	tests := []struct {
+		name string
+		args args
+		want want
+	}{
+		{
+			name: "importpath.TypeName format, import path and type name are returned",
+			args: args{spec: "github.com/example/domain.Foo"},
+			want: want{
+				importPath: "github.com/example/domain",
+				typeName:   "Foo",
+				fieldName:  "",
+				err:        nil,
+			},
+		},
+		{
+			name: "importpath.TypeName.FieldName format, field name is also returned",
+			args: args{spec: "github.com/example/domain.Foo.Name"},
+			want: want{
+				importPath: "github.com/example/domain",
+				typeName:   "Foo",
+				fieldName:  "Name",
+				err:        nil,
+			},
+		},
+		{
+			name: "import path without slash, package name and type name are returned",
+			args: args{spec: "domain.Foo"},
+			want: want{
+				importPath: "domain",
+				typeName:   "Foo",
+				fieldName:  "",
+				err:        nil,
+			},
+		},
+		{
+			name: "type name only without import path, an error is returned",
+			args: args{spec: "Foo"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+		{
+			name: "more than three dot-separated elements after the last slash, an error is returned",
+			args: args{spec: "github.com/example/domain.Foo.Name.Extra"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+		{
+			name: "empty element between dots, an error is returned",
+			args: args{spec: "github.com/example/domain..Foo"},
+			want: want{
+				importPath: "",
+				typeName:   "",
+				fieldName:  "",
+				err:        cmpopts.AnyError,
+			},
+		},
+	}
+
+	cmpOpts := []cmp.Option{cmp.AllowUnexported(want{}), cmpopts.EquateErrors()}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			importPath, typeName, fieldName, err := parseTypeSpec(test.args.spec)
+			got := want{
+				importPath: importPath,
+				typeName:   typeName,
+				fieldName:  fieldName,
+				err:        err,
+			}
+			if diff := cmp.Diff(test.want, got, cmpOpts...); diff != "" {
+				t.Errorf("parseTypeSpec(%q) returned unexpected result (-want +got):\n%s", test.args.spec, diff)
 			}
 		})
 	}

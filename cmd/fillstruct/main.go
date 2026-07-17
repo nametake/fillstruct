@@ -26,7 +26,7 @@ func (a *arrayFlags) Set(value string) error {
 func main() {
 	var typeFlags arrayFlags
 	var defaultFlags arrayFlags
-	flag.Var(&typeFlags, "type", "target type (importpath.TypeName), can be specified multiple times")
+	flag.Var(&typeFlags, "type", "target type (importpath.TypeName or importpath.TypeName.FieldName), can be specified multiple times")
 	flag.Var(&defaultFlags, "default", "custom default value (format: TypeSpec=ConstantName), can be specified multiple times")
 	flag.Parse()
 
@@ -54,7 +54,7 @@ func main() {
 	}
 
 	// Resolve target types
-	targetTypes, err := fillstruct.ResolveTargetTypes(typeFlags, dir)
+	targetTypes, targetFields, err := fillstruct.ResolveTargetTypes(typeFlags, dir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error resolving target types: %v\n", err)
 		os.Exit(1)
@@ -69,6 +69,7 @@ func main() {
 
 	option := &fillstruct.Option{
 		TargetTypes:    targetTypes,
+		TargetFields:   targetFields,
 		CustomDefaults: customDefaults,
 	}
 
